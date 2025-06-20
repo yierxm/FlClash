@@ -2,8 +2,10 @@ name: build
 
 on:
   push:
+    branches:
+      - main    # 添加 main 分支触发
     tags:
-      - 'v*'
+      - 'v*'    # 保留标签触发
 env:
   IS_STABLE: ${{ !contains(github.ref, '-') }}
 
@@ -51,10 +53,23 @@ jobs:
       - name: Setup Android Signing
         if: startsWith(matrix.platform,'android')
         run: |
-          echo "${{ secrets.KEYSTORE }}" | base64 --decode > android/app/keystore.jks
-          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/local.properties
-          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/local.properties
-          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/local.properties
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "Generating temporary debug keystore..."
+            keytool -genkey -v \
+              -keystore $ANDROID_KEYSTORE_PATH \
+              -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass android \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US"
+          else
+            echo "Using production keystore from secrets..."
+            echo "$KEYSTORE_BASE64" | base64 --decode > $ANDROID_KEYSTORE_PATH
+            echo "storeFile=$ANDROID_KEYSTORE_PATH" >> android/local.properties
+            echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/local.properties
+            echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/local.properties
+            echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/local.properties
+          fi
 
       - name: Setup Go
         uses: actions/setup-go@v5
